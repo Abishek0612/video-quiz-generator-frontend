@@ -66,10 +66,8 @@ export function VideoUpload() {
       file: File;
       language: string;
     }) => {
-      // Reset error state
       setUploadError(null);
 
-      // Log file details for debugging
       console.log("Uploading file:", {
         name: file.name,
         type: file.type,
@@ -78,16 +76,9 @@ export function VideoUpload() {
         language: language,
       });
 
-      // Create FormData and log its contents
       const formData = new FormData();
       formData.append("file", file, file.name);
       formData.append("language", language);
-
-      // Debug: Log FormData contents
-      console.log("FormData contents:");
-      for (let pair of formData.entries()) {
-        console.log(`  ${pair[0]}:`, pair[1]);
-      }
 
       try {
         const response = await videosApi.upload(file, language);
@@ -112,7 +103,6 @@ export function VideoUpload() {
       setUploadProgress(0);
       setUploadError(null);
 
-      // Navigate to video detail page after a short delay
       setTimeout(() => {
         navigate(`/video/${data._id}`);
       }, 1000);
@@ -120,14 +110,12 @@ export function VideoUpload() {
     onError: (error: any) => {
       console.error("Upload error:", error);
 
-      // Extract error details from different possible error structures
       const response = error.response?.data;
       const errorMessage =
         response?.message || error.message || "Failed to upload video";
       const errorDetails = response?.error || error.name || "";
       const statusCode = error.response?.status;
 
-      // Determine error type and provide specific feedback
       let errorType: UploadError["type"] = "server";
       let userFriendlyMessage = errorMessage;
       let userFriendlyDetails = errorDetails;
@@ -226,7 +214,6 @@ export function VideoUpload() {
         type: errorType,
       });
 
-      // Show appropriate toast message
       toast.error(toastMessage, {
         description:
           errorType === "ffmpeg"
@@ -240,7 +227,6 @@ export function VideoUpload() {
   });
 
   const onDrop = useCallback((acceptedFiles: File[], rejectedFiles: any[]) => {
-    // Reset error state
     setUploadError(null);
 
     if (rejectedFiles.length > 0) {
@@ -286,7 +272,6 @@ export function VideoUpload() {
         size: formatBytes(file.size),
       });
 
-      // Additional client-side validation
       const fileExtension = file.name.split(".").pop()?.toLowerCase();
       const validExtensions = ["mp4", "avi", "mov", "wmv", "mkv", "webm"];
 
@@ -306,7 +291,6 @@ export function VideoUpload() {
         return;
       }
 
-      // Additional MIME type validation
       const validMimeTypes = Object.keys(SUPPORTED_FORMATS);
       if (!validMimeTypes.includes(file.type) && file.type !== "") {
         console.warn(
@@ -347,7 +331,6 @@ export function VideoUpload() {
 
     console.log("Starting upload for:", selectedFile.name);
 
-    // Simulate upload progress
     const progressInterval = setInterval(() => {
       setUploadProgress((prev) => {
         if (prev >= 90) {
@@ -376,36 +359,27 @@ export function VideoUpload() {
   };
 
   const getErrorIcon = (errorType?: UploadError["type"]) => {
-    switch (errorType) {
-      case "network":
-        return <AlertCircle className="h-4 w-4" />;
-      case "size":
-        return <AlertCircle className="h-4 w-4" />;
-      case "format":
-        return <AlertCircle className="h-4 w-4" />;
-      case "ffmpeg":
-        return <AlertCircle className="h-4 w-4" />;
-      default:
-        return <AlertCircle className="h-4 w-4" />;
-    }
+    return <AlertCircle className="h-4 w-4" />;
   };
 
   return (
     <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
-        <CardTitle>Upload Video</CardTitle>
-        <CardDescription>
+        <CardTitle className="text-xl sm:text-2xl">Upload Video</CardTitle>
+        <CardDescription className="text-sm sm:text-base">
           Upload your lecture video to automatically generate quiz questions
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-4 sm:space-y-6">
         {/* Error Alert */}
         {uploadError && (
           <Alert variant="destructive">
             {getErrorIcon(uploadError.type)}
-            <AlertTitle>{uploadError.message}</AlertTitle>
+            <AlertTitle className="text-sm sm:text-base">
+              {uploadError.message}
+            </AlertTitle>
             {uploadError.details && (
-              <AlertDescription className="mt-2">
+              <AlertDescription className="mt-2 text-xs sm:text-sm">
                 {uploadError.details}
               </AlertDescription>
             )}
@@ -416,10 +390,10 @@ export function VideoUpload() {
         {uploadMutation.isSuccess && !selectedFile && (
           <Alert className="border-green-200 bg-green-50">
             <CheckCircle className="h-4 w-4 text-green-600" />
-            <AlertTitle className="text-green-900">
+            <AlertTitle className="text-green-900 text-sm sm:text-base">
               Upload Successful!
             </AlertTitle>
-            <AlertDescription className="text-green-800">
+            <AlertDescription className="text-green-800 text-xs sm:text-sm">
               Your video has been uploaded and is being processed. You will be
               redirected to the video details page.
             </AlertDescription>
@@ -431,7 +405,7 @@ export function VideoUpload() {
           <div
             {...getRootProps()}
             className={`
-              relative border-2 border-dashed rounded-lg p-8 text-center cursor-pointer
+              relative border-2 border-dashed rounded-lg p-4 sm:p-6 lg:p-8 text-center cursor-pointer
               transition-all duration-200 ease-in-out
               ${
                 isDragActive && !isDragReject
@@ -447,54 +421,61 @@ export function VideoUpload() {
 
             <Upload
               className={`
-              mx-auto h-12 w-12 mb-4 transition-colors
-              ${
-                isDragActive && !isDragReject
-                  ? "text-primary"
-                  : isDragReject
-                  ? "text-destructive"
-                  : "text-muted-foreground"
-              }
-            `}
+                mx-auto h-8 w-8 sm:h-10 sm:w-10 lg:h-12 lg:w-12 mb-2 sm:mb-4 transition-colors
+                ${
+                  isDragActive && !isDragReject
+                    ? "text-primary"
+                    : isDragReject
+                    ? "text-destructive"
+                    : "text-muted-foreground"
+                }
+              `}
             />
 
-            <p className="text-lg font-medium mb-2">
+            <p className="text-base sm:text-lg font-medium mb-1 sm:mb-2">
               {isDragActive && !isDragReject
                 ? "Drop your video here"
                 : isDragReject
                 ? "File not supported"
                 : "Drag & drop your video here"}
             </p>
-            <p className="text-sm text-muted-foreground mb-4">
+            <p className="text-xs sm:text-sm text-muted-foreground mb-2 sm:mb-4">
               or click to browse files
             </p>
 
-            <div className="flex flex-wrap justify-center gap-2 text-xs text-muted-foreground">
-              <span className="px-2 py-1 bg-secondary rounded">MP4</span>
-              <span className="px-2 py-1 bg-secondary rounded">AVI</span>
-              <span className="px-2 py-1 bg-secondary rounded">MOV</span>
-              <span className="px-2 py-1 bg-secondary rounded">WMV</span>
-              <span className="px-2 py-1 bg-secondary rounded">MKV</span>
-              <span className="px-2 py-1 bg-secondary rounded">WebM</span>
+            <div className="flex flex-wrap justify-center gap-1 sm:gap-2 text-xs text-muted-foreground">
+              {["MP4", "AVI", "MOV", "WMV", "MKV", "WebM"].map((format) => (
+                <span
+                  key={format}
+                  className="px-1.5 py-0.5 sm:px-2 sm:py-1 bg-secondary rounded text-xs"
+                >
+                  {format}
+                </span>
+              ))}
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
+            <p className="text-xs text-muted-foreground mt-1 sm:mt-2">
               Maximum file size: 1GB
             </p>
           </div>
         ) : (
           <div className="space-y-4">
             {/* Selected File Display */}
-            <div className="flex items-center justify-between p-4 border rounded-lg bg-accent/50">
-              <div className="flex items-center space-x-3 flex-1 min-w-0">
-                <FileVideo className="h-10 w-10 text-primary flex-shrink-0" />
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 border rounded-lg bg-accent/50 gap-3 sm:gap-0">
+              <div className="flex items-center space-x-3 flex-1 min-w-0 w-full sm:w-auto">
+                <FileVideo className="h-8 w-8 sm:h-10 sm:w-10 text-primary flex-shrink-0" />
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium truncate" title={selectedFile.name}>
+                  <p
+                    className="font-medium truncate text-sm sm:text-base"
+                    title={selectedFile.name}
+                  >
                     {selectedFile.name}
                   </p>
-                  <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-2 text-xs sm:text-sm text-muted-foreground">
                     <span>{formatBytes(selectedFile.size)}</span>
-                    <span>•</span>
-                    <span>{selectedFile.type || "Unknown type"}</span>
+                    <span className="hidden sm:inline">•</span>
+                    <span className="truncate">
+                      {selectedFile.type || "Unknown type"}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -503,7 +484,7 @@ export function VideoUpload() {
                 size="icon"
                 onClick={removeFile}
                 disabled={uploadMutation.isPending}
-                className="flex-shrink-0 ml-2"
+                className="flex-shrink-0 h-8 w-8 sm:h-10 sm:w-10 self-end sm:self-center"
                 title="Remove file"
               >
                 <X className="h-4 w-4" />
@@ -512,13 +493,15 @@ export function VideoUpload() {
 
             {/* Language Selection */}
             <div className="space-y-2">
-              <Label htmlFor="language">Video Language</Label>
+              <Label htmlFor="language" className="text-sm sm:text-base">
+                Video Language
+              </Label>
               <Select
                 value={language}
                 onValueChange={setLanguage}
                 disabled={uploadMutation.isPending}
               >
-                <SelectTrigger id="language">
+                <SelectTrigger id="language" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -535,7 +518,7 @@ export function VideoUpload() {
             {/* Upload Progress */}
             {(uploadMutation.isPending || uploadProgress > 0) && (
               <div className="space-y-2">
-                <div className="flex justify-between text-sm">
+                <div className="flex justify-between text-xs sm:text-sm">
                   <span>
                     {uploadProgress < 100 ? "Uploading..." : "Processing..."}
                   </span>
@@ -573,9 +556,9 @@ export function VideoUpload() {
         )}
 
         {/* Help Text */}
-        <div className="rounded-lg bg-muted p-4">
+        <div className="rounded-lg bg-muted p-3 sm:p-4">
           <h4 className="text-sm font-medium mb-2">Tips for best results:</h4>
-          <ul className="text-sm text-muted-foreground space-y-1">
+          <ul className="text-xs sm:text-sm text-muted-foreground space-y-1">
             <li>
               • Ensure your video has clear audio for accurate transcription
             </li>

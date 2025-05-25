@@ -57,21 +57,6 @@ export function Sidebar() {
           );
         })}
       </nav>
-
-      <div className="absolute bottom-0 left-0 right-0 border-t p-4">
-        <div className="rounded-lg bg-muted p-4">
-          <div className="flex items-center space-x-2 mb-2">
-            <HelpCircle className="h-5 w-5 text-muted-foreground" />
-            <h3 className="font-semibold">Need Help?</h3>
-          </div>
-          <p className="text-sm text-muted-foreground mb-3">
-            Check out our documentation for tips on getting the best results.
-          </p>
-          <Button variant="outline" size="sm" className="w-full">
-            View Docs
-          </Button>
-        </div>
-      </div>
     </aside>
   );
 }
