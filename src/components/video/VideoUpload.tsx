@@ -38,6 +38,8 @@ const SUPPORTED_FORMATS = {
   "video/quicktime": [".mov"],
   "video/x-ms-wmv": [".wmv"],
   "video/x-matroska": [".mkv"],
+  "video/webm": [".webm"],
+  "video/x-msvideo": [".avi"],
 };
 
 const MAX_FILE_SIZE = 1024 * 1024 * 1024; // 1GB
@@ -45,6 +47,7 @@ const MAX_FILE_SIZE = 1024 * 1024 * 1024; // 1GB
 interface UploadError {
   message: string;
   details?: string;
+  type?: "validation" | "server" | "network" | "ffmpeg" | "format" | "size";
 }
 
 export function VideoUpload() {
@@ -98,7 +101,11 @@ export function VideoUpload() {
     onSuccess: (data) => {
       console.log("Upload completed successfully:", data);
       toast.success(
-        "Video uploaded successfully! Processing will begin shortly."
+        "Video uploaded successfully! Processing will begin shortly.",
+        {
+          description: "You can track the progress in the video details page.",
+          duration: 5000,
+        }
       );
       queryClient.invalidateQueries({ queryKey: ["videos"] });
       setSelectedFile(null);
@@ -113,28 +120,120 @@ export function VideoUpload() {
     onError: (error: any) => {
       console.error("Upload error:", error);
 
-      // Extract error details
+      // Extract error details from different possible error structures
+      const response = error.response?.data;
       const errorMessage =
-        error.response?.data?.message ||
-        error.message ||
-        "Failed to upload video";
-      const errorDetails = error.response?.data?.error || "";
+        response?.message || error.message || "Failed to upload video";
+      const errorDetails = response?.error || error.name || "";
+      const statusCode = error.response?.status;
+
+      // Determine error type and provide specific feedback
+      let errorType: UploadError["type"] = "server";
+      let userFriendlyMessage = errorMessage;
+      let userFriendlyDetails = errorDetails;
+      let toastMessage = errorMessage;
+
+      // Network errors
+      if (
+        error.code === "NETWORK_ERROR" ||
+        error.message?.includes("Network Error")
+      ) {
+        errorType = "network";
+        userFriendlyMessage = "Network connection failed";
+        userFriendlyDetails =
+          "Please check your internet connection and try again.";
+        toastMessage =
+          "Network error. Please check your connection and try again.";
+      }
+      // File size errors
+      else if (
+        errorMessage.includes("file size") ||
+        errorMessage.includes("too large") ||
+        statusCode === 413
+      ) {
+        errorType = "size";
+        userFriendlyMessage = "File is too large";
+        userFriendlyDetails = `Maximum file size is 1GB. Your file is ${formatBytes(
+          selectedFile?.size || 0
+        )}.`;
+        toastMessage = "File is too large. Maximum size is 1GB.";
+      }
+      // FFmpeg/video processing errors
+      else if (
+        errorMessage.includes("duration") ||
+        errorMessage.includes("FFmpeg") ||
+        errorMessage.includes("ffmpeg") ||
+        errorMessage.includes("ffprobe")
+      ) {
+        errorType = "ffmpeg";
+        userFriendlyMessage = "Video processing failed";
+        userFriendlyDetails =
+          "The video file may be corrupted or in an unsupported format. Please try uploading a different video file.";
+        toastMessage =
+          "Failed to process video. Please ensure the file is a valid video format.";
+      }
+      // Format/validation errors
+      else if (
+        errorMessage.includes("Invalid video format") ||
+        errorMessage.includes("format") ||
+        errorMessage.includes("codec")
+      ) {
+        errorType = "format";
+        userFriendlyMessage = "Invalid video format";
+        userFriendlyDetails =
+          "Please upload a video file in one of these formats: MP4, AVI, MOV, WMV, MKV, or WebM.";
+        toastMessage =
+          "Invalid video format. Please upload MP4, AVI, MOV, WMV, or MKV files.";
+      }
+      // File not found or path errors
+      else if (
+        errorMessage.includes("ENOENT") ||
+        errorMessage.includes("file not found")
+      ) {
+        errorType = "server";
+        userFriendlyMessage = "File upload failed";
+        userFriendlyDetails =
+          "The file could not be saved on the server. Please try again.";
+        toastMessage = "File upload failed. Please try again.";
+      }
+      // Validation errors
+      else if (errorMessage.includes("validation") || statusCode === 400) {
+        errorType = "validation";
+        userFriendlyMessage = "Upload validation failed";
+        userFriendlyDetails = errorMessage;
+        toastMessage =
+          "Invalid upload data. Please check your file and try again.";
+      }
+      // Authentication errors
+      else if (statusCode === 401 || statusCode === 403) {
+        errorType = "server";
+        userFriendlyMessage = "Authentication failed";
+        userFriendlyDetails = "Please log in again and try uploading.";
+        toastMessage = "Authentication failed. Please log in again.";
+      }
+      // Server errors
+      else if (statusCode >= 500) {
+        errorType = "server";
+        userFriendlyMessage = "Server error";
+        userFriendlyDetails =
+          "The server encountered an error while processing your upload. Please try again later.";
+        toastMessage = "Server error. Please try again later.";
+      }
 
       setUploadError({
-        message: errorMessage,
-        details: errorDetails,
+        message: userFriendlyMessage,
+        details: userFriendlyDetails,
+        type: errorType,
       });
 
-      // Show toast with more specific error
-      if (errorMessage.includes("duration")) {
-        toast.error(
-          "Failed to process video. Please ensure FFmpeg is installed on the server."
-        );
-      } else if (errorMessage.includes("file size")) {
-        toast.error("File is too large. Maximum size is 1GB.");
-      } else {
-        toast.error(errorMessage);
-      }
+      // Show appropriate toast message
+      toast.error(toastMessage, {
+        description:
+          errorType === "ffmpeg"
+            ? "Try converting your video to MP4 format or use a different file."
+            : undefined,
+        duration: 8000,
+      });
 
       setUploadProgress(0);
     },
@@ -146,24 +245,36 @@ export function VideoUpload() {
 
     if (rejectedFiles.length > 0) {
       const error = rejectedFiles[0].errors[0];
+      const rejectedFile = rejectedFiles[0].file;
       console.log("File rejected:", rejectedFiles[0]);
 
+      let errorType: UploadError["type"] = "validation";
+      let errorMessage = "File rejected";
+      let errorDetails = "";
+
       if (error.code === "file-too-large") {
-        setUploadError({
-          message: "File is too large",
-          details: `Maximum file size is 1GB. Your file is ${formatBytes(
-            rejectedFiles[0].file.size
-          )}.`,
-        });
+        errorType = "size";
+        errorMessage = "File is too large";
+        errorDetails = `Maximum file size is 1GB. Your file is ${formatBytes(
+          rejectedFile.size
+        )}.`;
         toast.error("File is too large. Maximum size is 1GB.");
       } else if (error.code === "file-invalid-type") {
-        setUploadError({
-          message: "Invalid file type",
-          details:
-            "Please upload a valid video file (MP4, AVI, MOV, WMV, MKV).",
-        });
+        errorType = "format";
+        errorMessage = "Invalid file type";
+        errorDetails =
+          "Please upload a valid video file (MP4, AVI, MOV, WMV, MKV, WebM).";
         toast.error("Invalid file type. Please upload a video file.");
+      } else {
+        errorDetails = error.message || "Unknown validation error.";
+        toast.error("File validation failed");
       }
+
+      setUploadError({
+        message: errorMessage,
+        details: errorDetails,
+        type: errorType,
+      });
       return;
     }
 
@@ -175,9 +286,9 @@ export function VideoUpload() {
         size: formatBytes(file.size),
       });
 
-      // Additional validation
+      // Additional client-side validation
       const fileExtension = file.name.split(".").pop()?.toLowerCase();
-      const validExtensions = ["mp4", "avi", "mov", "wmv", "mkv"];
+      const validExtensions = ["mp4", "avi", "mov", "wmv", "mkv", "webm"];
 
       if (!fileExtension || !validExtensions.includes(fileExtension)) {
         setUploadError({
@@ -185,9 +296,22 @@ export function VideoUpload() {
           details: `File extension ".${fileExtension}" is not supported. Supported formats: ${validExtensions
             .join(", ")
             .toUpperCase()}`,
+          type: "format",
         });
-        toast.error("Invalid file format");
+        toast.error("Invalid file format", {
+          description: `Supported formats: ${validExtensions
+            .join(", ")
+            .toUpperCase()}`,
+        });
         return;
+      }
+
+      // Additional MIME type validation
+      const validMimeTypes = Object.keys(SUPPORTED_FORMATS);
+      if (!validMimeTypes.includes(file.type) && file.type !== "") {
+        console.warn(
+          `Warning: Unexpected MIME type ${file.type} for file ${file.name}`
+        );
       }
 
       setSelectedFile(file);
@@ -206,6 +330,18 @@ export function VideoUpload() {
   const handleUpload = () => {
     if (!selectedFile) {
       toast.error("Please select a file first");
+      return;
+    }
+
+    if (selectedFile.size > MAX_FILE_SIZE) {
+      setUploadError({
+        message: "File is too large",
+        details: `Maximum file size is 1GB. Your file is ${formatBytes(
+          selectedFile.size
+        )}.`,
+        type: "size",
+      });
+      toast.error("File is too large. Maximum size is 1GB.");
       return;
     }
 
@@ -239,6 +375,21 @@ export function VideoUpload() {
     setUploadError(null);
   };
 
+  const getErrorIcon = (errorType?: UploadError["type"]) => {
+    switch (errorType) {
+      case "network":
+        return <AlertCircle className="h-4 w-4" />;
+      case "size":
+        return <AlertCircle className="h-4 w-4" />;
+      case "format":
+        return <AlertCircle className="h-4 w-4" />;
+      case "ffmpeg":
+        return <AlertCircle className="h-4 w-4" />;
+      default:
+        return <AlertCircle className="h-4 w-4" />;
+    }
+  };
+
   return (
     <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
@@ -251,7 +402,7 @@ export function VideoUpload() {
         {/* Error Alert */}
         {uploadError && (
           <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
+            {getErrorIcon(uploadError.type)}
             <AlertTitle>{uploadError.message}</AlertTitle>
             {uploadError.details && (
               <AlertDescription className="mt-2">
@@ -269,7 +420,8 @@ export function VideoUpload() {
               Upload Successful!
             </AlertTitle>
             <AlertDescription className="text-green-800">
-              Your video has been uploaded and is being processed.
+              Your video has been uploaded and is being processed. You will be
+              redirected to the video details page.
             </AlertDescription>
           </Alert>
         )}
@@ -323,6 +475,7 @@ export function VideoUpload() {
               <span className="px-2 py-1 bg-secondary rounded">MOV</span>
               <span className="px-2 py-1 bg-secondary rounded">WMV</span>
               <span className="px-2 py-1 bg-secondary rounded">MKV</span>
+              <span className="px-2 py-1 bg-secondary rounded">WebM</span>
             </div>
             <p className="text-xs text-muted-foreground mt-2">
               Maximum file size: 1GB
@@ -335,10 +488,14 @@ export function VideoUpload() {
               <div className="flex items-center space-x-3 flex-1 min-w-0">
                 <FileVideo className="h-10 w-10 text-primary flex-shrink-0" />
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium truncate">{selectedFile.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {formatBytes(selectedFile.size)}
+                  <p className="font-medium truncate" title={selectedFile.name}>
+                    {selectedFile.name}
                   </p>
+                  <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                    <span>{formatBytes(selectedFile.size)}</span>
+                    <span>•</span>
+                    <span>{selectedFile.type || "Unknown type"}</span>
+                  </div>
                 </div>
               </div>
               <Button
@@ -347,6 +504,7 @@ export function VideoUpload() {
                 onClick={removeFile}
                 disabled={uploadMutation.isPending}
                 className="flex-shrink-0 ml-2"
+                title="Remove file"
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -385,7 +543,9 @@ export function VideoUpload() {
                 </div>
                 <Progress value={uploadProgress} className="h-2" />
                 <p className="text-xs text-muted-foreground">
-                  This may take a few minutes for large files
+                  {uploadProgress < 100
+                    ? "Uploading your video file to the server..."
+                    : "Upload complete! Processing will continue in the background."}
                 </p>
               </div>
             )}
@@ -416,10 +576,15 @@ export function VideoUpload() {
         <div className="rounded-lg bg-muted p-4">
           <h4 className="text-sm font-medium mb-2">Tips for best results:</h4>
           <ul className="text-sm text-muted-foreground space-y-1">
-            <li>• Ensure your video has clear audio</li>
-            <li>• Videos in English work best for now</li>
+            <li>
+              • Ensure your video has clear audio for accurate transcription
+            </li>
+            <li>
+              • Videos in English work best, but other languages are supported
+            </li>
             <li>• Shorter videos (under 30 minutes) process faster</li>
-            <li>• MP4 format is recommended</li>
+            <li>• MP4 format is recommended for best compatibility</li>
+            <li>• Make sure your video file is not corrupted</li>
           </ul>
         </div>
       </CardContent>
